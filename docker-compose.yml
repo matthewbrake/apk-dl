@@ -1,0 +1,15 @@
+
+version: '3.8'
+
+services:
+  apk-manager:
+    build: .
+    container_name: firestick_apk_manager
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    volumes:
+      # Map the Host Path (from .env) to the internal path
+      - ${HOST_APK_PATH:-./data}:/mnt/zima/HDD/data/InstallersAndTools/MobileApps/Firestick/_UPDATE
+    environment:
+      - REACT_APP_ENV=production

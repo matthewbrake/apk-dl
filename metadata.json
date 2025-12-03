@@ -1,0 +1,5 @@
+{
+  "name": "Firestick APK Manager",
+  "description": "Advanced APK scraper, library manager, and updater with fuzzy matching and multi-source support.",
+  "requestFramePermissions": []
+}
