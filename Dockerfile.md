@@ -1,38 +1,44 @@
 # Dockerfile
 
-Copy the content below into a file named `Dockerfile` to build the application.
+Run the command in the README to copy this content to `Dockerfile`.
 
 ```dockerfile
-# Stage 1: Build the React Application
-FROM node:18-alpine as build
+FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy dependency definitions
-COPY package.json package-lock.json* ./
+# 1. Install Dependencies
+COPY package.json .
+# We use legacy-peer-deps to ignore potential conflicts with react-scripts/react-18
+RUN npm install --legacy-peer-deps
 
-# Install dependencies (ci is faster and more reliable for builds)
-RUN npm ci --silent
-
-# Copy source code
+# 2. Copy Source Code
 COPY . .
 
-# Build the app for production
+# 3. AUTO-FIX FILE STRUCTURE
+# React Scripts (CRA) strictly requires:
+# - HTML in /public
+# - Code in /src
+# Since your files are flat, we move them now.
+RUN mkdir -p public src/components src/docs
+
+# Move HTML and Metadata to public
+RUN mv index.html metadata.json public/ 2>/dev/null || true
+
+# Move Source files to src
+RUN mv *.tsx *.ts src/ 2>/dev/null || true
+RUN mv simulated_data.ts src/ 2>/dev/null || true
+
+# Move Component folders (if they exist in root)
+RUN cp -r components/* src/components/ 2>/dev/null || true && rm -rf components
+RUN cp -r docs/* src/docs/ 2>/dev/null || true && rm -rf docs
+
+# 4. Build the App
 RUN npm run build
 
-# Stage 2: Serve with Nginx
-FROM nginx:alpine
+# 5. Serve with lightweight Node server on Port 3050
+RUN npm install -g serve
+EXPOSE 3050
 
-# Copy the build output from Stage 1 to Nginx html directory
-COPY --from=build /app/build /usr/share/nginx/html
-
-# Copy custom Nginx config if you have one (Optional)
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Expose port 80 to the outside world
-EXPOSE 80
-
-# Start Nginx
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["serve", "-s", "build", "-l", "3050"]
 ```

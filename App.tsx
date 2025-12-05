@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { SOURCES as DEFAULT_SOURCES, MOCK_LOCAL_LIBRARY } from './constants';
 import { AppEntry, LogEntry, ViewMode, SourceResult, DisplayStyle, SourceConfig, AppSettings } from './types';
@@ -7,7 +6,7 @@ import { AppCard } from './components/AppCard';
 import { AppListItem } from './components/AppListItem';
 import { Terminal } from './components/Terminal';
 import { SourceCompareModal } from './components/SourceCompareModal';
-import { Search, HardDrive, Globe, Play, RefreshCw, Terminal as TerminalIcon, ShieldCheck, LayoutGrid, List as ListIcon, Cloud, Settings, Save, Plus, Trash2, Cpu, Sparkles } from 'lucide-react';
+import { Search, HardDrive, Globe, Play, RefreshCw, Terminal as TerminalIcon, ShieldCheck, LayoutGrid, List as ListIcon, Cloud, Settings, Save, Plus, Trash2, Cpu, Sparkles, AlertCircle } from 'lucide-react';
 
 // Import the "Virtual Web Server" content map
 import { SITE_CONTENT_MAP } from './simulated_data';
@@ -49,14 +48,19 @@ const App: React.FC = () => {
       message
     };
     setLogs(prev => [...prev, entry]);
+    // Auto-scroll logic handled in Terminal component
   }, []);
 
   // Load Settings from LocalStorage on mount
   useEffect(() => {
-    const savedSettings = localStorage.getItem('apk_manager_settings');
-    if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
-      addLog('INFO', 'Loaded configuration from LocalStorage.');
+    try {
+      const savedSettings = localStorage.getItem('apk_manager_settings');
+      if (savedSettings) {
+        setSettings(JSON.parse(savedSettings));
+        addLog('INFO', 'Loaded configuration from LocalStorage.');
+      }
+    } catch (e) {
+      addLog('ERROR', 'Failed to load settings from LocalStorage.');
     }
   }, [addLog]);
 
@@ -79,16 +83,10 @@ const App: React.FC = () => {
 
   // --- OPTIONAL AI LOGIC ---
   const runAiAnalysis = async (appName: string) => {
-    // This function demonstrates how the Optional API keys would be used.
-    // It is strictly optional and only runs if keys are present.
     if (settings.apiKeys?.gemini || settings.apiKeys?.openai) {
       addLog('INFO', `[AI OPTIONAL] analyzing metadata for ${appName}...`);
-      // In a real backend, this would call: const aiData = await api.analyze(appName, settings.apiKeys);
       await new Promise(r => setTimeout(r, 500)); // Simulate API delay
       addLog('SUCCESS', `[AI OPTIONAL] Analysis complete. Enhanced tags generated.`);
-    } else {
-      // Gracefully skip if no keys
-      // addLog('INFO', `Skipping AI analysis (No API Key provided).`);
     }
   };
 
@@ -143,66 +141,79 @@ const App: React.FC = () => {
     setIsScanning(true);
     addLog('INFO', '--- STARTING SCAN ---');
     
-    // Check for Optional API Keys usage
-    if (settings.apiKeys?.gemini || settings.apiKeys?.openai) {
-        addLog('INFO', 'AI Engine Enabled: Using API Keys for enhanced parsing.');
-    } else {
-        addLog('INFO', 'Standard Mode: Using Regex Crawler (AI Disabled).');
-    }
-    
-    let allFoundApps: SourceResult[] = [];
+    try {
+        // Check for Optional API Keys usage
+        if (settings.apiKeys?.gemini || settings.apiKeys?.openai) {
+            addLog('INFO', 'AI Engine Enabled: Using API Keys for enhanced parsing.');
+        } else {
+            addLog('INFO', 'Standard Mode: Using Regex Crawler (AI Disabled).');
+        }
+        
+        let allFoundApps: SourceResult[] = [];
 
-    // Iterate through configured sources
-    for (const source of settings.sources) {
-        if (source.type === 'directory_list') {
-            addLog('INFO', `Connecting to Source: ${source.name} (${source.url})`);
-            
-            // NOTE: In production, this would be: const response = await fetch('/api/proxy?url=' + source.url);
-            // For demo, we check our simulated map.
-            const pathKey = '/Apkss/'; // Hardcoded mapping for simulation only
-            const rootHtml = SITE_CONTENT_MAP[pathKey]; 
-
-            if (!rootHtml) {
-                addLog('ERROR', `Could not reach ${source.url} (Simulation missing)`);
-                continue;
-            }
-
-            const folders = extractFolders(rootHtml);
-            addLog('SUCCESS', `[${source.name}] Found ${folders.length} directories.`);
-            
-            // Recursive Scan
-            for (const folderRaw of folders) {
-                let folderDisplay = folderRaw;
-                try { folderDisplay = decodeURIComponent(folderRaw); } catch(e) {}
+        // Iterate through configured sources
+        for (const source of settings.sources) {
+            if (source.type === 'directory_list') {
+                addLog('INFO', `Connecting to Source: ${source.name} (${source.url})`);
                 
-                addLog('INFO', `[${source.name}] Crawling: ${folderDisplay}...`);
-                
-                // Simulation Mapping
-                const subPathKey = `/Apkss/${folderRaw}`;
-                const folderHtml = SITE_CONTENT_MAP[subPathKey];
-                
-                await new Promise(r => setTimeout(r, 200)); 
+                const pathKey = '/Apkss/'; // Hardcoded mapping for simulation
+                const rootHtml = SITE_CONTENT_MAP[pathKey]; 
 
-                if (folderHtml) {
-                    const files = extractFiles(folderHtml, source.url, folderRaw, source.id, source.name);
-                    if (files.length > 0) {
-                        addLog('INFO', `   -> Indexed ${files.length} files`);
-                        allFoundApps = [...allFoundApps, ...files];
+                if (!rootHtml) {
+                    addLog('ERROR', `Connection failed to ${source.url} (Simulated content not found)`);
+                    continue;
+                }
+
+                const folders = extractFolders(rootHtml);
+                addLog('SUCCESS', `[${source.name}] Connected. Found ${folders.length} directories.`);
+                
+                // Recursive Scan
+                for (const folderRaw of folders) {
+                    try {
+                        let folderDisplay = folderRaw;
+                        try { folderDisplay = decodeURIComponent(folderRaw); } catch(e) {}
+                        
+                        addLog('INFO', `[${source.name}] Crawling: ${folderDisplay}...`);
+                        
+                        // Simulation Mapping
+                        const subPathKey = `/Apkss/${folderRaw}`;
+                        const folderHtml = SITE_CONTENT_MAP[subPathKey];
+                        
+                        await new Promise(r => setTimeout(r, 100)); // Fast processing
+
+                        if (folderHtml) {
+                            const files = extractFiles(folderHtml, source.url, folderRaw, source.id, source.name);
+                            if (files.length > 0) {
+                                addLog('INFO', `   -> Indexed ${files.length} files in ${folderDisplay}`);
+                                allFoundApps = [...allFoundApps, ...files];
+                            } else {
+                                addLog('WARN', `   -> No APKs found in ${folderDisplay}`);
+                            }
+                        } else {
+                            addLog('WARN', `   -> Failed to fetch content for ${folderDisplay}`);
+                        }
+                    } catch (folderError) {
+                         addLog('ERROR', `Failed to process folder ${folderRaw}: ${folderError}`);
                     }
                 }
+            } else {
+                 addLog('WARN', `Skipping ${source.name} (HTML Scrape not implemented in demo)`);
             }
-        } else {
-             addLog('WARN', `Skipping ${source.name} (HTML Scrape not implemented in demo)`);
         }
-    }
 
-    addLog('SUCCESS', `Scan Complete. Total Files Indexed: ${allFoundApps.length}`);
-    updateAppStates(allFoundApps);
-    setIsScanning(false);
+        addLog('SUCCESS', `Scan Complete. Total Files Indexed: ${allFoundApps.length}`);
+        updateAppStates(allFoundApps);
+
+    } catch (e: any) {
+        addLog('ERROR', `CRITICAL CRAWLER FAILURE: ${e.message}`);
+        console.error(e);
+    } finally {
+        setIsScanning(false);
+    }
   };
 
   const updateAppStates = (foundFiles: SourceResult[]) => {
-    addLog('INFO', 'Consolidating Index...');
+    addLog('INFO', 'Consolidating Index and Comparing Versions...');
     const uniqueAppsMap = new Map<string, AppEntry>();
 
     foundFiles.forEach(res => {
@@ -249,7 +260,7 @@ const App: React.FC = () => {
         return localApp;
       });
     });
-    addLog('SUCCESS', 'Library synced.');
+    addLog('SUCCESS', 'Library synced successfully.');
   };
 
   // --- ACTIONS ---
@@ -313,27 +324,31 @@ const App: React.FC = () => {
   };
 
   const handleInstall = async (app: AppEntry) => {
-    const category = app.category || detectCategory(app.name);
-    const installPath = `${settings.downloadPath}/${category}/`;
-    addLog('INFO', `Installing to: ${installPath}`);
-    
-    setRemoteApps(prev => prev.map(a => a.id === app.id ? { ...a, status: 'downloading' } : a));
-    const targetSource = [...app.availableUpdates].sort((a,b) => compareVersions(b.version, a.version))[0];
-    
-    await new Promise(r => setTimeout(r, 2000));
-    addLog('SUCCESS', `Installed ${targetSource.filename}`);
-    
-    const newLocalApp: AppEntry = {
-      ...app,
-      id: Math.random().toString(36).substr(2, 9),
-      status: 'current',
-      localVersion: app.remoteVersion,
-      remoteVersion: null,
-      localPath: `${installPath}${targetSource.filename}`,
-      availableUpdates: []
-    };
-    setApps(prev => [newLocalApp, ...prev]);
-    setRemoteApps(prev => prev.filter(a => a.id !== app.id)); 
+    try {
+        const category = app.category || detectCategory(app.name);
+        const installPath = `${settings.downloadPath}/${category}/`;
+        addLog('INFO', `Installing to: ${installPath}`);
+        
+        setRemoteApps(prev => prev.map(a => a.id === app.id ? { ...a, status: 'downloading' } : a));
+        const targetSource = [...app.availableUpdates].sort((a,b) => compareVersions(b.version, a.version))[0];
+        
+        await new Promise(r => setTimeout(r, 2000));
+        addLog('SUCCESS', `Installed ${targetSource.filename}`);
+        
+        const newLocalApp: AppEntry = {
+          ...app,
+          id: Math.random().toString(36).substr(2, 9),
+          status: 'current',
+          localVersion: app.remoteVersion,
+          remoteVersion: null,
+          localPath: `${installPath}${targetSource.filename}`,
+          availableUpdates: []
+        };
+        setApps(prev => [newLocalApp, ...prev]);
+        setRemoteApps(prev => prev.filter(a => a.id !== app.id)); 
+    } catch (e: any) {
+        addLog('ERROR', `Installation Failed: ${e.message}`);
+    }
   };
 
   const handleRename = (app: AppEntry) => {
@@ -377,7 +392,7 @@ const App: React.FC = () => {
             <ShieldCheck className="text-emerald-500" />
             <h1 className="text-xl font-bold tracking-tight text-white">APK Manager</h1>
           </div>
-          <p className="text-xs text-slate-500 font-mono">v4.2.0-prod</p>
+          <p className="text-xs text-slate-500 font-mono">v4.2.1-debug</p>
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
@@ -467,7 +482,7 @@ const App: React.FC = () => {
               <div className="mb-8 pt-8 border-t border-slate-800/50">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-2"><Cloud size={16} /> Discover ({filteredRemoteApps.length})</h2>
-                  {remoteApps.length === 0 && !isScanning && <span className="text-xs text-amber-500">Click "Scan Updates" to populate.</span>}
+                  {remoteApps.length === 0 && !isScanning && <span className="text-xs text-amber-500 flex items-center gap-1"><AlertCircle size={12}/> Click "Scan Updates" to populate.</span>}
                 </div>
                 {displayStyle === DisplayStyle.GRID ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -543,4 +558,57 @@ const App: React.FC = () => {
                </div>
 
                {/* Source Configuration */}
-               <div className="bg-slate-800/30 border border
+               <div className="bg-slate-800/30 border border-slate-700 rounded-xl p-6">
+                 <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-white">Scraping Sources</h3>
+                    <button onClick={handleAddSource} className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded flex items-center gap-1"><Plus size={12}/> Add Source</button>
+                 </div>
+                 <div className="space-y-4">
+                    {settings.sources.map(source => (
+                        <div key={source.id} className="flex gap-4 items-start bg-slate-900/50 p-4 rounded-lg border border-slate-800">
+                           <div className="flex-1 grid gap-2">
+                              <input 
+                                value={source.name} 
+                                onChange={(e) => handleUpdateSource(source.id, 'name', e.target.value)}
+                                className="bg-transparent border-b border-slate-700 focus:border-indigo-500 text-sm font-bold text-white px-1"
+                                placeholder="Source Name"
+                              />
+                              <input 
+                                value={source.url} 
+                                onChange={(e) => handleUpdateSource(source.id, 'url', e.target.value)}
+                                className="bg-transparent border-b border-slate-700 focus:border-indigo-500 text-xs font-mono text-slate-400 px-1"
+                                placeholder="URL"
+                              />
+                              <select 
+                                value={source.type}
+                                onChange={(e) => handleUpdateSource(source.id, 'type', e.target.value)}
+                                className="bg-slate-950 border border-slate-800 text-xs rounded p-1 w-32"
+                              >
+                                <option value="directory_list">Directory List</option>
+                                <option value="html_scrape">HTML Scrape</option>
+                              </select>
+                           </div>
+                           <button onClick={() => handleRemoveSource(source.id)} className="text-slate-600 hover:text-red-400 p-2"><Trash2 size={16}/></button>
+                        </div>
+                    ))}
+                 </div>
+               </div>
+
+               <div className="flex justify-end pt-4">
+                 <button onClick={handleSettingsSave} className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded font-bold flex items-center gap-2 shadow-lg">
+                    <Save size={18} />
+                    Save Configuration
+                 </button>
+               </div>
+            </div>
+          )}
+        </div>
+
+        {selectedApp && <SourceCompareModal app={selectedApp} isOpen={isCompareModalOpen} onClose={() => setIsCompareModalOpen(false)} onDownload={handleDownload}/>}
+        <Terminal logs={logs} isOpen={showTerminal} onToggle={() => setShowTerminal(false)} onClear={() => setLogs([])} />
+      </main>
+    </div>
+  );
+};
+
+export default App;
