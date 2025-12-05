@@ -8,9 +8,10 @@ FROM node:18-alpine
 WORKDIR /app
 
 # 1. Install Dependencies
+# We clean cache first to ensure a fresh start
 COPY package.json .
-# We use legacy-peer-deps to ignore potential conflicts with react-scripts/react-18
-RUN npm install --legacy-peer-deps
+RUN npm cache clean --force
+RUN npm install
 
 # 2. Copy Source Code
 COPY . .
@@ -34,6 +35,8 @@ RUN cp -r components/* src/components/ 2>/dev/null || true && rm -rf components
 RUN cp -r docs/* src/docs/ 2>/dev/null || true && rm -rf docs
 
 # 4. Build the App
+# We define CI=false to prevent warnings from failing the build
+ENV CI=false
 RUN npm run build
 
 # 5. Serve with lightweight Node server on Port 3050

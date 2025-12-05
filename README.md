@@ -2,7 +2,7 @@
 
 A robust, "self-hosted" web dashboard for managing, scraping, and updating APK files for Firestick/Android TV.
 
-**Current Version:** v4.3.0-node  
+**Current Version:** v4.3.1-fix  
 **Tech Stack:** React, Node.js (Serve), Docker  
 **Port:** 3050
 
@@ -10,7 +10,7 @@ A robust, "self-hosted" web dashboard for managing, scraping, and updating APK f
 
 ## 🚀 Quick Start (Copy & Paste)
 
-Follow these exact instructions to get the Web UI running in minutes.
+The build requires a specific `package.json` fix and a clean Dockerfile. Run these commands exactly:
 
 ### 1. Initialize Dockerfile
 Run this specific command to overwrite the Dockerfile with the correct Node.js configuration:
@@ -20,9 +20,10 @@ cp Dockerfile.md Dockerfile
 ```
 
 ### 2. Build and Run
-Spin up the container using Docker Compose. This will automatically reorganize your file structure and start the server.
+This will remove old containers to ensure a fresh build with the new dependency fixes.
 
 ```bash
+docker-compose down
 docker-compose up -d --build
 ```
 
