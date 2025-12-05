@@ -11,7 +11,11 @@ WORKDIR /app
 # We clean cache first to ensure a fresh start
 COPY package.json .
 RUN npm cache clean --force
-RUN npm install
+
+# Use verbose logging to see progress
+# Disable audit and fund to speed up install
+# Increase network timeout for slow connections
+RUN npm install --verbose --no-audit --no-fund --fetch-timeout=600000
 
 # 2. Copy Source Code
 COPY . .

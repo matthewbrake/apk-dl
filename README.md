@@ -2,7 +2,7 @@
 
 A robust, "self-hosted" web dashboard for managing, scraping, and updating APK files for Firestick/Android TV.
 
-**Current Version:** v4.3.1-fix  
+**Current Version:** v4.3.2-stable
 **Tech Stack:** React, Node.js (Serve), Docker  
 **Port:** 3050
 

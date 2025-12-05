@@ -354,7 +354,7 @@ const App: React.FC = () => {
             <ShieldCheck className="text-emerald-500" />
             <h1 className="text-xl font-bold tracking-tight text-white">APK Manager</h1>
           </div>
-          <p className="text-xs text-slate-500 font-mono">v4.3.0-node</p>
+          <p className="text-xs text-slate-500 font-mono">v4.3.2-stable</p>
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
