@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppEntry } from '../types';
-import { Download, CheckCircle, Smartphone, RefreshCw, FolderInput, Edit3, PlusCircle } from 'lucide-react';
+import { Download, CheckCircle, Smartphone, RefreshCw, FolderInput, Edit3, PlusCircle, ArrowRight } from 'lucide-react';
 
 interface AppCardProps {
   app: AppEntry;
@@ -20,12 +20,12 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onUpdate, onRename, onMov
       ${!isInstalled
         ? 'bg-slate-900/40 border-slate-800 hover:border-indigo-500/50 hover:bg-slate-800/60'
         : isUpdateAvailable 
-          ? 'bg-slate-800/50 border-amber-500/50 hover:border-amber-400 shadow-lg shadow-amber-900/10' 
+          ? 'bg-slate-800/50 border-emerald-500/50 hover:border-emerald-400 shadow-lg shadow-emerald-900/10' 
           : 'bg-slate-800/30 border-slate-700 hover:border-slate-600'}
     `}>
       <div className="flex justify-between items-start mb-4">
-        <div className={`p-3 rounded-lg ${!isInstalled ? 'bg-slate-800' : 'bg-slate-700/50'}`}>
-          <Smartphone className={!isInstalled ? "text-slate-500" : isUpdateAvailable ? "text-amber-400" : "text-slate-400"} size={24} />
+        <div className={`p-3 rounded-lg ${!isInstalled ? 'bg-slate-800' : isUpdateAvailable ? 'bg-emerald-900/20' : 'bg-slate-700/50'}`}>
+          <Smartphone className={!isInstalled ? "text-slate-500" : isUpdateAvailable ? "text-emerald-400" : "text-slate-400"} size={24} />
         </div>
         {isInstalled && (
           <div className="flex gap-1">
@@ -52,15 +52,25 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onUpdate, onRename, onMov
         {app.localPath ? app.localPath.split('/').pop() : 'Not Installed'}
       </p>
 
-      <div className="grid grid-cols-2 gap-2 mb-4 text-sm mt-auto">
-        <div className={`bg-slate-900/50 p-2 rounded border border-slate-800 ${!isInstalled && 'opacity-50'}`}>
-          <div className="text-slate-500 text-[10px] uppercase font-bold mb-1">LOCAL</div>
-          <div className="font-mono text-slate-300 truncate">{app.localVersion ? `v${app.localVersion}` : '-'}</div>
+      {/* Version Comparison Box */}
+      <div className="flex items-stretch gap-0.5 mb-4 text-sm mt-auto bg-slate-950/50 rounded-lg border border-slate-800 overflow-hidden">
+        <div className="flex-1 p-2 bg-slate-900/50">
+          <div className="text-slate-500 text-[9px] uppercase font-bold mb-0.5">CURRENT</div>
+          <div className={`font-mono font-bold truncate ${isInstalled ? (isUpdateAvailable ? 'text-rose-400' : 'text-slate-300') : 'text-slate-600'}`}>
+             {app.localVersion ? `v${app.localVersion}` : '-'}
+          </div>
         </div>
-        <div className={`p-2 rounded border ${isUpdateAvailable ? 'bg-amber-900/20 border-amber-500/30' : 'bg-slate-900/50 border-slate-800'}`}>
-          <div className="text-slate-500 text-[10px] uppercase font-bold mb-1">{!isInstalled ? 'LATEST' : 'REMOTE'}</div>
-          <div className={`font-mono truncate ${isUpdateAvailable || !isInstalled ? 'text-emerald-400' : 'text-slate-500'}`}>
-            {app.remoteVersion ? `v${app.remoteVersion}` : (!isInstalled ? 'Unknown' : 'Syncing...')}
+        
+        {isInstalled && isUpdateAvailable && (
+             <div className="flex items-center justify-center bg-slate-900 px-1">
+                 <ArrowRight size={12} className="text-slate-600"/>
+             </div>
+        )}
+
+        <div className={`flex-1 p-2 ${isUpdateAvailable ? 'bg-emerald-900/20' : 'bg-slate-900/50'}`}>
+          <div className="text-slate-500 text-[9px] uppercase font-bold mb-0.5">{!isInstalled ? 'LATEST' : 'AVAILABLE'}</div>
+          <div className={`font-mono font-bold truncate ${isUpdateAvailable || !isInstalled ? 'text-emerald-400' : 'text-slate-500'}`}>
+            {app.remoteVersion ? `v${app.remoteVersion}` : (!isInstalled ? 'Unknown' : 'Same')}
           </div>
         </div>
       </div>
@@ -70,7 +80,7 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onUpdate, onRename, onMov
           onClick={() => onUpdate(app)}
           className={`w-full py-2 px-4 rounded text-sm font-bold flex items-center justify-center gap-2 transition-all
             ${isUpdateAvailable 
-              ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-lg' 
+              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20' 
               : app.status === 'downloading'
                 ? 'bg-slate-700 text-slate-400 cursor-wait'
                 : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}
@@ -79,7 +89,7 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onUpdate, onRename, onMov
           {isUpdateAvailable ? (
             <>
               <Download size={16} />
-              Compare {app.availableUpdates.length} Sources
+              Update Found
             </>
           ) : app.status === 'downloading' ? (
             <>
@@ -89,7 +99,7 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onUpdate, onRename, onMov
           ) : (
             <>
               <CheckCircle size={16} />
-              Check Versions
+              Up to Date
             </>
           )}
         </button>

@@ -7,10 +7,13 @@ import { AppCard } from './components/AppCard';
 import { AppListItem } from './components/AppListItem';
 import { Terminal } from './components/Terminal';
 import { SourceCompareModal } from './components/SourceCompareModal';
-import { Search, HardDrive, Play, RefreshCw, Terminal as TerminalIcon, ShieldCheck, LayoutGrid, List as ListIcon, Cloud, Settings, Save, Plus, Trash2, Sparkles, AlertCircle } from 'lucide-react';
+import { Search, HardDrive, Play, RefreshCw, Terminal as TerminalIcon, ShieldCheck, LayoutGrid, List as ListIcon, Cloud, Settings, Save, Plus, Trash2, Sparkles, AlertCircle, Database, Clock } from 'lucide-react';
 
 // Import the "Virtual Web Server" content map
 import { SITE_CONTENT_MAP } from './simulated_data';
+
+const CACHE_KEY = 'apk_manager_scraped_cache';
+const CACHE_TIMESTAMP_KEY = 'apk_manager_cache_time';
 
 const App: React.FC = () => {
   // --- STATE ---
@@ -22,6 +25,8 @@ const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<ViewMode>(ViewMode.LIBRARY);
   const [displayStyle, setDisplayStyle] = useState<DisplayStyle>(DisplayStyle.GRID);
+  const [lastScanned, setLastScanned] = useState<string | null>(null);
+  const [forceRescan, setForceRescan] = useState(false);
   
   // Settings State
   const [settings, setSettings] = useState<AppSettings>({
@@ -49,8 +54,9 @@ const App: React.FC = () => {
       message
     };
     setLogs(prev => [...prev, entry]);
-    // Also log to browser console for Docker/DevTools debugging
-    console.log(`[APK-MANAGER][${level}] ${message}`);
+    // Log to browser/docker console for debugging
+    if (level === 'ERROR') console.error(`[APK-MANAGER] ${message}`);
+    else console.log(`[APK-MANAGER][${level}] ${message}`);
   }, []);
 
   // Load Settings from LocalStorage on mount
@@ -59,15 +65,33 @@ const App: React.FC = () => {
       const savedSettings = localStorage.getItem('apk_manager_settings');
       if (savedSettings) {
         setSettings(JSON.parse(savedSettings));
-        addLog('INFO', 'System initialized. Loaded configuration.');
+        addLog('INFO', 'System initialized. Configuration loaded.');
       }
     } catch (e) {
       addLog('ERROR', 'Failed to load settings from LocalStorage.');
     }
   }, [addLog]);
 
+  // Load Cache on Mount
+  useEffect(() => {
+    try {
+        const cachedData = localStorage.getItem(CACHE_KEY);
+        const cachedTime = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+
+        if (cachedData && cachedTime) {
+            const parsedCache: AppEntry[] = JSON.parse(cachedData);
+            setRemoteApps(parsedCache);
+            setLastScanned(cachedTime);
+            addLog('SUCCESS', `Loaded ${parsedCache.length} apps from local cache (${cachedTime})`);
+        }
+    } catch (e) {
+        console.error("Cache load error", e);
+    }
+  }, [addLog]);
+
   // Load Local Library
   useEffect(() => {
+    // In a real app, this would fetch from an API scanning the disk
     const initialApps: AppEntry[] = MOCK_LOCAL_LIBRARY.map(mock => ({
       id: Math.random().toString(36).substr(2, 9),
       name: mock.name,
@@ -79,7 +103,30 @@ const App: React.FC = () => {
       localPath: mock.path,
       availableUpdates: []
     }));
-    setApps(initialApps);
+    
+    // Merge with remote apps if they exist to update status immediately
+    setApps(currentLocalApps => {
+       // If we have remote apps loaded from cache, sync status immediately
+       const cachedData = localStorage.getItem(CACHE_KEY);
+       if (cachedData) {
+           const parsedRemote: AppEntry[] = JSON.parse(cachedData);
+           return initialApps.map(local => {
+               const remoteMatch = parsedRemote.find(r => r.normalizedName === local.normalizedName);
+               if (remoteMatch) {
+                   const isUpdate = compareVersions(remoteMatch.remoteVersion || '0.0.0', local.localVersion || '99.9.9') > 0;
+                   return {
+                       ...local,
+                       remoteVersion: remoteMatch.remoteVersion,
+                       availableUpdates: remoteMatch.availableUpdates,
+                       status: isUpdate ? 'update_available' : 'current'
+                   };
+               }
+               return local;
+           });
+       }
+       return initialApps;
+    });
+
     addLog('INFO', `Mounted Local Library. Found ${initialApps.length} APKs.`);
   }, [addLog]);
 
@@ -87,7 +134,17 @@ const App: React.FC = () => {
 
   const performScan = async () => {
     setIsScanning(true);
-    addLog('INFO', '--- STARTING UPDATE SCAN ---');
+    
+    // If cache exists and forceRescan is FALSE, just reload cache
+    if (!forceRescan && lastScanned) {
+        addLog('INFO', '--- SCAN SKIPPED (USING CACHE) ---');
+        addLog('INFO', 'Enable "Force Full Rescan" to ignore cache.');
+        setIsScanning(false);
+        return;
+    }
+
+    addLog('INFO', '--- STARTING FULL NETWORK SCAN ---');
+    setRemoteApps([]); // Clear current view
     
     try {
         let allFoundApps: SourceResult[] = [];
@@ -188,7 +245,15 @@ const App: React.FC = () => {
         }
     });
 
-    setRemoteApps(Array.from(uniqueAppsMap.values()));
+    const consolidatedRemote = Array.from(uniqueAppsMap.values());
+    setRemoteApps(consolidatedRemote);
+
+    // PERSIST TO CACHE
+    const now = new Date().toLocaleString();
+    localStorage.setItem(CACHE_KEY, JSON.stringify(consolidatedRemote));
+    localStorage.setItem(CACHE_TIMESTAMP_KEY, now);
+    setLastScanned(now);
+    addLog('SUCCESS', `Database cached to persistent storage at ${now}`);
     
     // Update Local Apps with Remote Data
     setApps(prevApps => {
@@ -254,9 +319,8 @@ const App: React.FC = () => {
         : `${settings.downloadPath}/${result.category || 'Downloads'}`;
         
     // In a real implementation, this would POST to a backend endpoint.
-    // For now, we simulate the server processing the wget command.
     const command = `wget -c "${result.url}" -O "${targetDir}/${result.filename}"`;
-    addLog('WARN', `COMMAND GENERATED: ${command}`);
+    addLog('WARN', `EXECUTING: ${command}`);
 
     setApps(prev => prev.map(a => a.id === selectedApp.id ? { ...a, status: 'downloading' } : a));
     
@@ -354,7 +418,7 @@ const App: React.FC = () => {
             <ShieldCheck className="text-emerald-500" />
             <h1 className="text-xl font-bold tracking-tight text-white">APK Manager</h1>
           </div>
-          <p className="text-xs text-slate-500 font-mono">v4.3.2-stable</p>
+          <p className="text-xs text-slate-500 font-mono">v4.3.2-prod</p>
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
@@ -410,6 +474,18 @@ const App: React.FC = () => {
           )}
           
           {activeTab === ViewMode.LIBRARY && (
+            <div className="flex items-center gap-3">
+             <div className="flex items-center gap-2 mr-2">
+                 <label className="text-xs text-slate-400 cursor-pointer flex items-center gap-1 select-none">
+                    <input 
+                        type="checkbox" 
+                        checked={forceRescan} 
+                        onChange={(e) => setForceRescan(e.target.checked)}
+                        className="rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-offset-slate-900"
+                    />
+                    Force Full Rescan
+                 </label>
+             </div>
              <button 
                 onClick={performScan}
                 disabled={isScanning}
@@ -418,6 +494,7 @@ const App: React.FC = () => {
                 {isScanning ? <RefreshCw className="animate-spin" size={16} /> : <Play size={16} />}
                 {isScanning ? 'Scanning...' : 'Scan Updates'}
             </button>
+            </div>
           )}
         </header>
 
@@ -425,7 +502,17 @@ const App: React.FC = () => {
           {activeTab === ViewMode.LIBRARY && (
             <>
               <div className="mb-8">
-                <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2"><HardDrive size={16} /> My Library ({filteredLocalApps.length})</h2>
+                <div className="flex justify-between items-end mb-4">
+                    <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                        <HardDrive size={16} /> My Library ({filteredLocalApps.length})
+                    </h2>
+                    {lastScanned && (
+                        <span className="text-xs text-slate-600 font-mono flex items-center gap-1">
+                            <Clock size={12}/> Index Cache: {lastScanned}
+                        </span>
+                    )}
+                </div>
+                
                 {displayStyle === DisplayStyle.GRID ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {filteredLocalApps.map(app => (
@@ -482,6 +569,12 @@ const App: React.FC = () => {
                         onChange={(e) => setSettings({...settings, webPort: parseInt(e.target.value)})}
                         className="w-32 bg-slate-950 border border-slate-800 rounded p-2 text-sm text-slate-300 font-mono"
                      />
+                   </div>
+                   <div>
+                       <div className="flex items-center justify-between text-xs text-slate-400 mt-4 pt-4 border-t border-slate-700">
+                           <span className="flex items-center gap-2"><Database size={14}/> Cached data uses Browser LocalStorage.</span>
+                           <button onClick={() => { localStorage.removeItem(CACHE_KEY); setLastScanned(null); setRemoteApps([]); addLog('WARN', 'Cache Cleared.'); }} className="text-red-400 hover:text-red-300">Clear Cache</button>
+                       </div>
                    </div>
                  </div>
                </div>
